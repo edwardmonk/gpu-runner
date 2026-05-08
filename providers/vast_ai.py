@@ -4,52 +4,57 @@ import requests
 
 class VastProvider:
     """
-    Vast.ai provider. Uses the interruptible (spot) market by default for lowest cost.
+    Vast.ai provider. Picks the cheapest available single-GPU offer matching
+    the requested GPU name. If instance_type is omitted or 'cheapest', picks
+    the cheapest available offer regardless of GPU type.
 
-    instance_type in the manifest is a GPU name filter, e.g. "RTX_3090" or "RTX_4090".
-    Vast searches available offers matching that GPU and picks the cheapest.
-
-    ssh_key_name is not used — Vast injects keys via the API key account's registered keys.
-    Set your public key at https://vast.ai/console/account/
+    ssh_key_name is not used — Vast injects keys registered in your account.
+    Register your public key at https://vast.ai/console/account/
 
     Environment variable: VAST_API_KEY
     """
 
     BASE = "https://console.vast.ai/api/v0"
-    # Docker image with CUDA + PyTorch pre-installed
     DEFAULT_IMAGE = "pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime"
 
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
-    def _search_offers(self, gpu_name: str, interruptible: bool = True) -> list[dict]:
-        instance_type = "interruptible" if interruptible else "on-demand"
-        params = {
-            "q": (
-                f'{{"rentable":{{"eq":true}},"num_gpus":{{"eq":1}},'
-                f'"gpu_name":{{"eq":"{gpu_name}"}},'
-                f'"type":"{instance_type}"}}'
-            ),
-            "order": "dph_total asc",
-            "limit": 20,
-        }
-        r = requests.get(f"{self.BASE}/bundles/", headers=self.headers, params=params)
+    def _available_offers(self, gpu_filter: str | None = None, num_gpus: int = 1) -> list[dict]:
+        r = requests.get(f"{self.BASE}/bundles/", headers=self.headers)
         r.raise_for_status()
-        return r.json().get("offers", [])
+        offers = r.json().get("offers", [])
+
+        available = [
+            o for o in offers
+            if o.get("rentable")
+            and not o.get("rented")
+            and o.get("dph_total")
+            and o.get("num_gpus", 0) == num_gpus
+        ]
+
+        if gpu_filter and gpu_filter.lower() not in ("cheapest", "any"):
+            normalized = gpu_filter.replace("_", " ").lower()
+            available = [
+                o for o in available
+                if normalized in (o.get("gpu_name") or "").lower()
+            ]
+
+        available.sort(key=lambda o: o["dph_total"])
+        return available
 
     def launch(self, instance_type: str, ssh_key_name: str | None = None, region: str | None = None) -> str:
-        offers = self._search_offers(instance_type, interruptible=True)
+        offers = self._available_offers(gpu_filter=instance_type)
         if not offers:
-            # Fall back to on-demand if no interruptible capacity
-            offers = self._search_offers(instance_type, interruptible=False)
-        if not offers:
-            raise RuntimeError(f"No Vast.ai offers available for GPU: {instance_type}")
+            raise RuntimeError(
+                f"No Vast.ai offers available for '{instance_type}'. "
+                f"Check https://vast.ai/console/search/ for current availability."
+            )
 
         offer = offers[0]
         offer_id = offer["id"]
-        price = offer.get("dph_total", "?")
-        print(f"  best offer: {offer.get('gpu_name')} ${price:.3f}/hr (id: {offer_id})")
+        print(f"  best offer: {offer.get('gpu_name')} ${offer['dph_total']:.3f}/hr (id: {offer_id})")
 
         r = requests.put(
             f"{self.BASE}/asks/{offer_id}/",

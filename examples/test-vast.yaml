@@ -5,7 +5,7 @@
 # Register your SSH public key at https://vast.ai/console/account/ first.
 
 provider: vast
-instance_type: RTX_3090
+instance_type: cheapest   # picks cheapest available single GPU
 ssh_key: ~/.ssh/lambda
 
 inputs: []
