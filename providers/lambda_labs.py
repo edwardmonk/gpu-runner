@@ -11,7 +11,7 @@ class LambdaProvider:
     def launch(self, instance_type: str, ssh_key_name: str, region: str | None = None) -> str:
         if not region:
             region = self._find_region(instance_type)
-        r = requests.post(f"{self.BASE}/instances", headers=self.headers, json={
+        r = requests.post(f"{self.BASE}/instance-operations/launch", headers=self.headers, json={
             "instance_type_name": instance_type,
             "region_name": region,
             "ssh_key_names": [ssh_key_name],
@@ -45,8 +45,8 @@ class LambdaProvider:
         raise TimeoutError(f"Instance {instance_id} did not get an IP within {timeout}s")
 
     def terminate(self, instance_id: str):
-        requests.delete(
-            f"{self.BASE}/instances",
+        requests.post(
+            f"{self.BASE}/instance-operations/terminate",
             headers=self.headers,
             json={"instance_ids": [instance_id]},
         ).raise_for_status()
