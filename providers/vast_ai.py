@@ -82,16 +82,22 @@ class VastProvider:
                 return inst
         return None
 
-    def wait_for_connection(self, instance_id: str, timeout: int = 300) -> tuple[str, int, str]:
+    def wait_for_connection(self, instance_id: str, timeout: int = 600) -> tuple[str, int, str]:
         """Returns (ip, port, user). Vast.ai uses non-standard SSH ports."""
         deadline = time.time() + timeout
+        last_status = None
         while time.time() < deadline:
             inst = self._get_instance(instance_id)
-            if inst and inst.get("actual_status") == "running":
-                ip = inst.get("ssh_host") or inst.get("public_ipaddr")
-                port = inst.get("ssh_port", 22)
-                if ip and port:
-                    return ip, int(port), "root"
+            if inst:
+                status = inst.get("actual_status") or inst.get("status_msg") or "unknown"
+                if status != last_status:
+                    print(f"  instance status: {status}")
+                    last_status = status
+                if status == "running":
+                    ip = inst.get("ssh_host") or inst.get("public_ipaddr")
+                    port = inst.get("ssh_port", 22)
+                    if ip and port:
+                        return ip, int(port), "root"
             time.sleep(10)
         raise TimeoutError(f"Instance {instance_id} did not become ready within {timeout}s")
 
