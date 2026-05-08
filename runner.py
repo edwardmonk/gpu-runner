@@ -110,6 +110,7 @@ def run_job(manifest: dict, dry_run: bool = False):
 
     provider = PROVIDERS[provider_name](api_key)
     instance_id = None
+    ssh_established = False
 
     try:
         print(f"Launching {instance_type} on {provider_name}...")
@@ -123,6 +124,7 @@ def run_job(manifest: dict, dry_run: bool = False):
         print("Waiting for SSH to become available...")
         if not wait_for_ssh(ip, ssh_key, port=port, user=user):
             raise RuntimeError("SSH never became available")
+        ssh_established = True
         print("  SSH ready")
 
         for item in inputs:
@@ -151,7 +153,7 @@ def run_job(manifest: dict, dry_run: bool = False):
         print("All outputs collected.")
 
     finally:
-        if instance_id:
+        if instance_id and ssh_established:
             print(f"Terminating instance {instance_id}...")
             try:
                 provider.terminate(instance_id)
@@ -159,6 +161,9 @@ def run_job(manifest: dict, dry_run: bool = False):
             except Exception as e:
                 print(f"\n*** WARNING: termination failed: {e}")
                 print(f"*** MANUAL ACTION REQUIRED: terminate {instance_id} on {provider_name}")
+        elif instance_id and not ssh_established:
+            print(f"\n*** Instance {instance_id} launched but SSH never connected.")
+            print(f"*** MANUAL ACTION REQUIRED: check and terminate {instance_id} on {provider_name}")
 
 
 # ---------------------------------------------------------------------------

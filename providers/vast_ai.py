@@ -64,7 +64,7 @@ class VastProvider:
                     "client_id": "me",
                     "image": self.DEFAULT_IMAGE,
                     "runtype": "ssh",
-                    "disk": 20,
+                    "disk": 40,
                 },
             )
             if r.status_code == 200:
