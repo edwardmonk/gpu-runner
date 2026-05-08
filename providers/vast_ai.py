@@ -45,31 +45,37 @@ class VastProvider:
         return available
 
     def launch(self, instance_type: str, ssh_key_name: str | None = None, region: str | None = None) -> str:
-        offers = self._available_offers(gpu_filter=instance_type)
-        if not offers:
-            raise RuntimeError(
-                f"No Vast.ai offers available for '{instance_type}'. "
-                f"Check https://vast.ai/console/search/ for current availability."
+        for attempt in range(5):
+            offers = self._available_offers(gpu_filter=instance_type)
+            if not offers:
+                raise RuntimeError(
+                    f"No Vast.ai offers available for '{instance_type}'. "
+                    f"Check https://vast.ai/console/search/ for current availability."
+                )
+
+            offer = offers[0]
+            offer_id = offer["id"]
+            print(f"  trying: {offer.get('gpu_name')} ${offer['dph_total']:.3f}/hr (id: {offer_id})")
+
+            r = requests.put(
+                f"{self.BASE}/asks/{offer_id}/",
+                headers=self.headers,
+                json={
+                    "client_id": "me",
+                    "image": self.DEFAULT_IMAGE,
+                    "runtype": "ssh",
+                    "disk": 20,
+                },
             )
+            if r.status_code == 200:
+                data = r.json()
+                instance_id = str(data.get("new_contract") or data.get("id"))
+                print(f"  launched: {instance_id}")
+                return instance_id
+            print(f"  offer taken (attempt {attempt + 1}/5), retrying...")
+            time.sleep(2)
 
-        offer = offers[0]
-        offer_id = offer["id"]
-        print(f"  best offer: {offer.get('gpu_name')} ${offer['dph_total']:.3f}/hr (id: {offer_id})")
-
-        r = requests.put(
-            f"{self.BASE}/asks/{offer_id}/",
-            headers=self.headers,
-            json={
-                "client_id": "me",
-                "image": self.DEFAULT_IMAGE,
-                "runtype": "ssh",
-                "disk": 20,
-            },
-        )
-        r.raise_for_status()
-        data = r.json()
-        instance_id = str(data.get("new_contract") or data.get("id"))
-        return instance_id
+        raise RuntimeError("Failed to launch after 5 attempts — all offers taken. Try again.")
 
     def _get_instance(self, instance_id: str) -> dict | None:
         r = requests.get(f"{self.BASE}/instances/", headers=self.headers)
