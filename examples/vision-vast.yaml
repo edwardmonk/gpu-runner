@@ -1,0 +1,25 @@
+# LinkedCulture full vision captioning run on Vast.ai
+# Resumes from existing captions.csv — skips records already done.
+# Run: python runner.py examples/vision-vast.yaml
+
+provider: vast
+instance_type: A100 PCIE
+ssh_key: ~/.ssh/lambda
+
+inputs:
+  - local: /tmp/work_list_full.csv
+    remote: ~/work_list.csv
+  - local: /srv/linked-culture-vision/caption.py
+    remote: ~/caption.py
+  - local: /srv/linked-culture-vision/requirements-gpu.txt
+    remote: ~/requirements-gpu.txt
+  - local: /srv/linked-culture-vision/captions.csv
+    remote: ~/captions.csv
+
+script: |
+  pip install -r requirements-gpu.txt -q
+  python caption.py --input work_list.csv --output captions.csv --resume
+
+outputs:
+  - remote: ~/captions.csv
+    local: /tmp/captions_vast.csv
