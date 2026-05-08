@@ -32,6 +32,7 @@ class VastProvider:
             and not o.get("rented")
             and o.get("dph_total")
             and o.get("num_gpus", 0) == num_gpus
+            and (o.get("reliability2") or o.get("reliability") or 0) >= 0.90
         ]
 
         if gpu_filter and gpu_filter.lower() not in ("cheapest", "any"):
