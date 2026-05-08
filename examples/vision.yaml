@@ -1,0 +1,25 @@
+# LinkedCulture vision captioning job
+# Run from the Hetzner VPS:
+#   LAMBDA_API_KEY=your_key python runner.py examples/vision.yaml
+
+provider: lambda
+instance_type: gpu_1x_a10
+ssh_key: ~/.ssh/lambda
+ssh_key_name: hetzner-vision
+# region: us-east-1  # omit to auto-select available region
+
+inputs:
+  - local: /tmp/work_list.csv
+    remote: ~/work_list.csv
+  - local: /srv/linked-culture-vision/caption.py
+    remote: ~/caption.py
+  - local: /srv/linked-culture-vision/requirements-gpu.txt
+    remote: ~/requirements-gpu.txt
+
+script: |
+  pip install -r requirements-gpu.txt -q
+  python caption.py --input work_list.csv --output captions.csv --resume
+
+outputs:
+  - remote: ~/captions.csv
+    local: /tmp/captions.csv
