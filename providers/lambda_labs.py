@@ -35,12 +35,13 @@ class LambdaProvider:
         r.raise_for_status()
         return r.json()["data"].get("ip")
 
-    def wait_for_ip(self, instance_id: str, timeout: int = 300) -> str:
+    def wait_for_connection(self, instance_id: str, timeout: int = 300) -> tuple[str, int, str]:
+        """Returns (ip, port, user)."""
         deadline = time.time() + timeout
         while time.time() < deadline:
             ip = self.get_ip(instance_id)
             if ip:
-                return ip
+                return ip, 22, "ubuntu"
             time.sleep(10)
         raise TimeoutError(f"Instance {instance_id} did not get an IP within {timeout}s")
 

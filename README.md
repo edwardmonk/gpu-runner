@@ -83,9 +83,10 @@ The script runs as `ubuntu` on the GPU instance inside `bash -euo pipefail` — 
 
 ## Environment variables
 
-| Variable       | Provider    | Description                                   |
-| -------------- | ----------- | --------------------------------------------- |
-| LAMBDA_API_KEY | Lambda Labs | API key from lambda.ai/cloud → API Keys       |
+| Variable       | Provider    | Description                                          |
+| -------------- | ----------- | ---------------------------------------------------- |
+| LAMBDA_API_KEY | Lambda Labs | API key from lambda.ai/cloud → API Keys              |
+| VAST_API_KEY   | Vast.ai     | API key from vast.ai/console/account → API Keys      |
 
 ## Providers
 
@@ -105,6 +106,23 @@ for name, info in r.json()["data"].items():
         price = info["instance_type"]["price_cents_per_hour"]
         print(f"{name}  ${price/100:.2f}/hr")
 ```
+
+### Vast.ai (`provider: vast`)
+
+Uses the **interruptible** (spot) market by default — 50%+ cheaper than on-demand. Falls back to on-demand if no interruptible capacity is available. Vast uses non-standard SSH ports; the runner handles this automatically.
+
+`instance_type` is a GPU name filter. Vast searches all available offers matching that GPU and picks the cheapest:
+
+```yaml
+provider: vast
+instance_type: RTX_3090   # or RTX_4090, A100, H100, etc.
+ssh_key: ~/.ssh/your_key
+# ssh_key_name not needed — Vast uses keys registered in your account
+```
+
+Register your SSH public key at vast.ai/console/account before running. Set `VAST_API_KEY` from vast.ai/console/account → API Keys.
+
+Because Vast instances are interruptible, jobs should support `--resume`. If an instance is reclaimed, re-run the same manifest — it will pick up where it left off.
 
 ### Adding a provider
 
@@ -156,5 +174,6 @@ Faster GPUs cost more per hour but finish sooner — for large jobs H100 is ofte
 
 | Manifest              | Description                                           |
 | --------------------- | ----------------------------------------------------- |
-| `examples/test.yaml`  | GPU smoke test — prints device info, runs matmul      |
-| `examples/vision.yaml`| LinkedCulture image captioning via Qwen2.5-VL         |
+| `examples/test.yaml`       | GPU smoke test on Lambda Labs                         |
+| `examples/test-vast.yaml`  | GPU smoke test on Vast.ai interruptible               |
+| `examples/vision.yaml`     | LinkedCulture image captioning via Qwen2.5-VL         |

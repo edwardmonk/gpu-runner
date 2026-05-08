@@ -2,7 +2,7 @@
 """
 runner.py — generic GPU-on-demand job runner
 
-Launches a cloud GPU instance, uploads inputs, runs a script,
+Launches a cloud GPU instance, uploads inputs, runs a job script,
 downloads outputs, and terminates. Always terminates in a finally
 block so a failed job never leaves a billable instance running.
 
@@ -12,6 +12,7 @@ Usage:
 
 Environment variables:
     LAMBDA_API_KEY      API key for Lambda Labs
+    VAST_API_KEY        API key for Vast.ai
 """
 
 import argparse
@@ -31,26 +32,27 @@ from providers import PROVIDERS
 # SSH / SCP helpers
 # ---------------------------------------------------------------------------
 
-def _ssh_args(ip: str, key: str) -> list[str]:
+def _ssh_args(ip: str, key: str, port: int = 22, user: str = "ubuntu") -> list[str]:
     return [
         "-i", os.path.expanduser(key),
         "-o", "StrictHostKeyChecking=no",
         "-o", "ConnectTimeout=10",
         "-o", "BatchMode=yes",
+        "-p", str(port),
     ]
 
 
-def ssh_run(ip: str, key: str, command: str, timeout: int = 86400) -> int:
+def ssh_run(ip: str, key: str, command: str, port: int = 22, user: str = "ubuntu", timeout: int = 86400) -> int:
     return subprocess.run(
-        ["ssh", *_ssh_args(ip, key), f"ubuntu@{ip}", command],
+        ["ssh", *_ssh_args(ip, key, port), f"{user}@{ip}", command],
         timeout=timeout,
     ).returncode
 
 
-def wait_for_ssh(ip: str, key: str, retries: int = 24, interval: int = 15) -> bool:
+def wait_for_ssh(ip: str, key: str, port: int = 22, user: str = "ubuntu", retries: int = 24, interval: int = 15) -> bool:
     for attempt in range(retries):
         try:
-            if ssh_run(ip, key, "echo ok", timeout=15) == 0:
+            if ssh_run(ip, key, "echo ok", port=port, user=user, timeout=15) == 0:
                 return True
         except Exception:
             pass
@@ -59,16 +61,16 @@ def wait_for_ssh(ip: str, key: str, retries: int = 24, interval: int = 15) -> bo
     return False
 
 
-def scp_up(local: str, ip: str, key: str, remote: str):
+def scp_up(local: str, ip: str, key: str, remote: str, port: int = 22, user: str = "ubuntu"):
     subprocess.run(
-        ["scp", *_ssh_args(ip, key), local, f"ubuntu@{ip}:{remote}"],
+        ["scp", *_ssh_args(ip, key, port), local, f"{user}@{ip}:{remote}"],
         check=True,
     )
 
 
-def scp_down(ip: str, key: str, remote: str, local: str):
+def scp_down(ip: str, key: str, remote: str, local: str, port: int = 22, user: str = "ubuntu"):
     subprocess.run(
-        ["scp", *_ssh_args(ip, key), f"ubuntu@{ip}:{remote}", local],
+        ["scp", *_ssh_args(ip, key, port), f"{user}@{ip}:{remote}", local],
         check=True,
     )
 
@@ -81,7 +83,7 @@ def run_job(manifest: dict, dry_run: bool = False):
     provider_name = manifest.get("provider", "lambda")
     instance_type = manifest["instance_type"]
     ssh_key = manifest["ssh_key"]
-    ssh_key_name = manifest["ssh_key_name"]
+    ssh_key_name = manifest.get("ssh_key_name")
     region = manifest.get("region")
     script = manifest["script"].strip()
     inputs = manifest.get("inputs", [])
@@ -114,38 +116,37 @@ def run_job(manifest: dict, dry_run: bool = False):
         instance_id = provider.launch(instance_type, ssh_key_name, region)
         print(f"  instance ID: {instance_id}")
 
-        print("Waiting for IP address...")
-        ip = provider.wait_for_ip(instance_id)
-        print(f"  IP: {ip}")
+        print("Waiting for connection details...")
+        ip, port, user = provider.wait_for_connection(instance_id)
+        print(f"  {user}@{ip}:{port}")
 
         print("Waiting for SSH to become available...")
-        if not wait_for_ssh(ip, ssh_key):
-            raise RuntimeError("SSH never became available — check instance and security settings")
+        if not wait_for_ssh(ip, ssh_key, port=port, user=user):
+            raise RuntimeError("SSH never became available")
         print("  SSH ready")
 
         for item in inputs:
             print(f"Uploading {item['local']} → {item['remote']}")
-            scp_up(item["local"], ip, ssh_key, item["remote"])
+            scp_up(item["local"], ip, ssh_key, item["remote"], port=port, user=user)
 
-        # Write script to a temp file, upload, execute
         print("Running job script...")
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
             f.write("#!/usr/bin/env bash\nset -euo pipefail\n\n")
             f.write(script)
             tmp_script = f.name
         try:
-            scp_up(tmp_script, ip, ssh_key, "~/job_script.sh")
+            scp_up(tmp_script, ip, ssh_key, "~/job_script.sh", port=port, user=user)
         finally:
             os.unlink(tmp_script)
 
-        rc = ssh_run(ip, ssh_key, "bash ~/job_script.sh")
+        rc = ssh_run(ip, ssh_key, "bash ~/job_script.sh", port=port, user=user)
         if rc != 0:
             raise RuntimeError(f"Job script exited with code {rc}")
         print("  Job complete")
 
         for item in outputs:
             print(f"Downloading {item['remote']} → {item['local']}")
-            scp_down(ip, ssh_key, item["remote"], item["local"])
+            scp_down(ip, ssh_key, item["remote"], item["local"], port=port, user=user)
 
         print("All outputs collected.")
 
