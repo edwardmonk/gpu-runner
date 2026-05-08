@@ -72,12 +72,15 @@ class VastProvider:
         return instance_id
 
     def _get_instance(self, instance_id: str) -> dict | None:
-        r = requests.get(f"{self.BASE}/instances/{instance_id}/", headers=self.headers)
-        if r.status_code == 404:
-            return None
+        r = requests.get(f"{self.BASE}/instances/", headers=self.headers)
         r.raise_for_status()
-        instances = r.json().get("instances", [])
-        return instances[0] if instances else None
+        instances = r.json().get("instances") or []
+        if isinstance(instances, dict):
+            instances = list(instances.values())
+        for inst in instances:
+            if str(inst.get("id")) == str(instance_id):
+                return inst
+        return None
 
     def wait_for_connection(self, instance_id: str, timeout: int = 300) -> tuple[str, int, str]:
         """Returns (ip, port, user). Vast.ai uses non-standard SSH ports."""
