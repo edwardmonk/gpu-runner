@@ -3,7 +3,7 @@
 # Run: python runner.py examples/vision-vast.yaml
 
 provider: vast
-instance_type: A100 PCIE
+instance_type: cheapest
 ssh_key: ~/.ssh/lambda
 
 inputs:
