@@ -2,7 +2,7 @@
 provider: lambda
 instance_type: gpu_1x_a10
 ssh_key: ~/.ssh/lambda
-ssh_key_name: Hetzner VPS
+ssh_key_name: linkedculture-vision
 
 inputs: []
 
