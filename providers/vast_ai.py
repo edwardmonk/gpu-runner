@@ -15,7 +15,7 @@ class VastProvider:
     """
 
     BASE = "https://console.vast.ai/api/v0"
-    DEFAULT_IMAGE = "pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime"
+    DEFAULT_IMAGE = "nvcr.io/nvidia/pytorch:24.01-py3"
 
     def __init__(self, api_key: str):
         self.api_key = api_key
