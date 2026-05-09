@@ -3,7 +3,8 @@
 # Run: python runner.py examples/vision-vast.yaml
 
 provider: vast
-instance_type: cheapest
+instance_type: RTX 4090
+machine_id: 28733139   # Texas RTX 4090 48GB, 99.88% reliability
 ssh_key: ~/.ssh/lambda
 
 inputs:

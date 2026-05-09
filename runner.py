@@ -85,6 +85,7 @@ def run_job(manifest: dict, dry_run: bool = False):
     ssh_key = manifest["ssh_key"]
     ssh_key_name = manifest.get("ssh_key_name")
     region = manifest.get("region")
+    machine_id = manifest.get("machine_id")
     script = manifest["script"].strip()
     inputs = manifest.get("inputs", [])
     outputs = manifest.get("outputs", [])
@@ -114,7 +115,7 @@ def run_job(manifest: dict, dry_run: bool = False):
 
     try:
         print(f"Launching {instance_type} on {provider_name}...")
-        instance_id = provider.launch(instance_type, ssh_key_name, region)
+        instance_id = provider.launch(instance_type, ssh_key_name, region, machine_id=machine_id)
         print(f"  instance ID: {instance_id}")
 
         print("Waiting for connection details...")

@@ -21,7 +21,7 @@ class VastProvider:
         self.api_key = api_key
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
-    def _available_offers(self, gpu_filter: str | None = None, num_gpus: int = 1) -> list[dict]:
+    def _available_offers(self, gpu_filter: str | None = None, num_gpus: int = 1, machine_id: int | None = None) -> list[dict]:
         r = requests.get(f"{self.BASE}/bundles/", headers=self.headers)
         r.raise_for_status()
         offers = r.json().get("offers", [])
@@ -35,6 +35,9 @@ class VastProvider:
             and (o.get("reliability2") or o.get("reliability") or 0) >= 0.90
         ]
 
+        if machine_id:
+            available = [o for o in available if o.get("machine_id") == machine_id]
+
         if gpu_filter and gpu_filter.lower() not in ("cheapest", "any"):
             normalized = gpu_filter.replace("_", " ").lower()
             available = [
@@ -45,9 +48,9 @@ class VastProvider:
         available.sort(key=lambda o: o["dph_total"])
         return available
 
-    def launch(self, instance_type: str, ssh_key_name: str | None = None, region: str | None = None) -> str:
+    def launch(self, instance_type: str, ssh_key_name: str | None = None, region: str | None = None, machine_id: int | None = None) -> str:
         for attempt in range(5):
-            offers = self._available_offers(gpu_filter=instance_type)
+            offers = self._available_offers(gpu_filter=instance_type, machine_id=machine_id)
             if not offers:
                 raise RuntimeError(
                     f"No Vast.ai offers available for '{instance_type}'. "
